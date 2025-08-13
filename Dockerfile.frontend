@@ -1,0 +1,29 @@
+# Use Node.js 18 Alpine image
+FROM node:18-alpine
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install dependencies
+RUN npm install
+
+# Create non-root user first
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S nextjs -u 1001
+
+# Copy application code
+COPY --chown=nextjs:nodejs . .
+
+# Create .next directory and subdirectories with proper permissions
+RUN mkdir -p .next/types .next/cache .next/server .next/static && chown -R nextjs:nodejs .next
+
+USER nextjs
+
+# Expose port
+EXPOSE 3000
+
+# Start the development server
+CMD ["npm", "run", "dev"] 

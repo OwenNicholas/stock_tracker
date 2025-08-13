@@ -1,0 +1,48 @@
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: stock_tracker_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: stock_tracker
+      POSTGRES_USER: stock_user
+      POSTGRES_PASSWORD: stock_password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - stock_network
+
+  # Frontend Next.js Service
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: stock_tracker_frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://stock_user:stock_password@postgres:5432/stock_tracker
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    networks:
+      - stock_network
+    command: npm run dev
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  stock_network:
+    driver: bridge 
