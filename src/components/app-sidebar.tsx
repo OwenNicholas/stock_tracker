@@ -31,19 +31,9 @@ const data = {
   },
   navMain: [
     {
-      title: "Dashboard",
-      url: "/dashboard",
-      icon: IconDashboard,
-    },
-    {
       title: "Update Stock",
       url: "/stock",
       icon: IconPackage,
-    },
-    {
-      title: "Transactions",
-      url: "/transactions",
-      icon: GrTransaction,
     },
     {
       title: "Upcoming Feature",

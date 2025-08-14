@@ -3,7 +3,9 @@ export interface Product {
   id: number;
   name: string;
   stock_awal: number;
-  keluar: number;
+  keluar_manual: number;
+  keluar_pos: number;
+  keluar?: number; // Computed total: keluar_manual + keluar_pos
   stock_akhir: number;
   qty_di_pesan: number;
   created_at: string;

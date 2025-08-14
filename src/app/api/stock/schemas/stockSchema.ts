@@ -5,7 +5,8 @@ export const stockUpdateSchema = z.object({
   id: z.number().positive('Product ID must be a positive number'),
   name: z.string().min(1, 'Product name is required').max(255, 'Product name too long'),
   stock_awal: z.number().min(0, 'Stock awal cannot be negative'),
-  keluar: z.number().min(0, 'Keluar cannot be negative'),
+  keluar_manual: z.number().min(0, 'Keluar manual cannot be negative'),
+  keluar_pos: z.number().min(0, 'Keluar POS cannot be negative'),
   stock_akhir: z.number(),
   qty_di_pesan: z.number().min(0, 'Qty di pesan cannot be negative')
 });

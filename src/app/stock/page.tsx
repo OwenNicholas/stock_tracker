@@ -4,8 +4,17 @@ import { useState, useEffect } from "react"
 import { LayoutWrapper } from "@/components/layout-wrapper"
 import { SiteHeader } from "@/components/site-header"
 import { apiService, type Product } from "@/lib/api"
+import { ProtectedRoute } from "@/components/ProtectedRoute"
 
 export default function StockPage() {
+  return (
+    <ProtectedRoute>
+      <StockPageContent />
+    </ProtectedRoute>
+  );
+}
+
+function StockPageContent() {
   const [stockData, setStockData] = useState<Product[]>([])
   const [filteredData, setFilteredData] = useState<Product[]>([])
   const [searchTerm, setSearchTerm] = useState("")
@@ -22,13 +31,6 @@ export default function StockPage() {
     day: 'numeric'
   })
 
-  // Calculate stock_akhir and qty_di_pesan for a product
-  const calculateStockValues = (stock_awal: number, keluar: number) => {
-    const stock_akhir = stock_awal - keluar;
-    const qty_di_pesan = Math.max(0, keluar * 3 - stock_akhir);
-    return { stock_akhir, qty_di_pesan };
-  }
-
   // Fetch stock data from API
   useEffect(() => {
     const fetchStockData = async () => {
@@ -36,7 +38,7 @@ export default function StockPage() {
         setLoading(true)
         setError(null)
         
-        // Use the new stock endpoint that reads from daily snapshot
+        // Get stock data directly from products table
         const response = await apiService.getCurrentStock()
         
         if (response.success && response.data) {
@@ -70,14 +72,13 @@ export default function StockPage() {
 
   // Start editing a row
   const startEditing = (item: Product) => {
-    const calculated = calculateStockValues(item.stock_awal, item.keluar);
     setEditingId(item.id)
     setEditForm({
       name: item.name,
       stock_awal: item.stock_awal,
-      keluar: item.keluar,
-      stock_akhir: calculated.stock_akhir,
-      qty_di_pesan: calculated.qty_di_pesan
+      keluar_manual: item.keluar_manual,
+      keluar_pos: item.keluar_pos,
+      days_to_order: item.days_to_order || 3
     })
   }
 
@@ -96,7 +97,9 @@ export default function StockPage() {
       const response = await apiService.updateStock(editingId, {
         name: editForm.name || '',
         stock_awal: editForm.stock_awal || 0,
-        keluar: editForm.keluar || 0
+        keluar_manual: editForm.keluar_manual || 0,
+        keluar_pos: editForm.keluar_pos || 0,
+        days_to_order: editForm.days_to_order || 3
       })
 
       if (response.success && response.data) {
@@ -137,6 +140,68 @@ export default function StockPage() {
     setEditForm(prev => ({ ...prev, [field]: value }))
   }
 
+  // Perform rollover - export current data and reset for new period
+  const handleRollover = async () => {
+    if (!confirm('Are you sure you want to perform rollover? This will:\n1. Export current stock data as CSV\n2. Set stock_awal = stock_akhir + qty_di_pesan\n3. Reset all other values to 0\n\nThis action cannot be undone!')) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      const response = await apiService.performRollover();
+      
+      if (response.success && response.data) {
+        // Export current data to CSV before it gets updated
+        exportToCSV(response.data.exportedData);
+        
+        // Update local state with new data
+        setStockData(response.data.updatedData);
+        setFilteredData(response.data.updatedData);
+        
+        alert('Rollover completed successfully! Current data has been exported to CSV and database has been updated.');
+      } else {
+        throw new Error(response.error || 'Failed to perform rollover');
+      }
+    } catch (error) {
+      console.error('Error performing rollover:', error);
+      setError('Failed to perform rollover. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // Export stock data to CSV
+  const exportToCSV = (data: Product[]) => {
+    // Create CSV content
+    const headers = ['Product Name', 'Stock Awal', 'Keluar Manual', 'Keluar POS', 'Stock Akhir', 'Qty Di Pesan', 'Selisih', 'Days to Order'];
+    const csvContent = [
+      headers.join(','),
+      ...data.map(item => [
+        `"${item.name}"`,
+        item.stock_awal,
+        item.keluar_manual,
+        item.keluar_pos,
+        item.stock_akhir,
+        item.qty_di_pesan,
+        item.selisih,
+        item.days_to_order
+      ].join(','))
+    ].join('\n');
+
+    // Create and download CSV file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `stock-rollover-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   return (
     <LayoutWrapper>
       <SiteHeader />
@@ -166,8 +231,19 @@ export default function StockPage() {
         </div>
       )}
 
-      {/* Search Bar */}
-      <div className="mb-6 flex justify-end">
+      {/* Search Bar and Rollover Button */}
+      <div className="mb-6 flex justify-between items-center">
+        <button
+          onClick={handleRollover}
+          disabled={loading}
+          className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 flex items-center space-x-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+          </svg>
+          <span>Rollover</span>
+        </button>
+        
         <div className="relative w-80">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -189,20 +265,29 @@ export default function StockPage() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/3">
+                <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/4">
                   Product Name
                 </th>
-                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/6">
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
                   STOCK AWAL
                 </th>
-                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/6">
-                  KELUAR
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
+                  KELUAR MANUAL
                 </th>
-                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/6">
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
+                  KELUAR POS
+                </th>
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
                   STOCK AKHIR
                 </th>
-                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/6">
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
                   QTY DI PESAN
+                </th>
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
+                  SELISIH
+                </th>
+                <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
+                  DAYS TO ORDER
                 </th>
                 <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/12">
                   Actions
@@ -212,7 +297,7 @@ export default function StockPage() {
             <tbody className="bg-white divide-y divide-gray-200">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center">
+                  <td colSpan={9} className="px-6 py-8 text-center">
                     <div className="flex items-center justify-center">
                       <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -224,14 +309,14 @@ export default function StockPage() {
                 </tr>
               ) : filteredData.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan={9} className="px-6 py-8 text-center text-gray-500">
                     {searchTerm ? `No products found matching "${searchTerm}"` : 'No products found'}
                   </td>
                 </tr>
               ) : (
                 filteredData.map((item) => (
                 <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 md:px-6 w-1/3">
+                  <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 md:px-6 w-1/4">
                     {editingId === item.id ? (
                       <input
                         type="text"
@@ -243,7 +328,7 @@ export default function StockPage() {
                       item.name
                     )}
                   </td>
-                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/6">
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
                     {editingId === item.id ? (
                       <input
                         type="number"
@@ -255,43 +340,60 @@ export default function StockPage() {
                       item.stock_awal
                     )}
                   </td>
-                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/6">
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
                     {editingId === item.id ? (
                       <input
                         type="number"
-                        value={editForm.keluar || ''}
-                        onChange={(e) => handleInputChange('keluar', parseInt(e.target.value) || 0)}
+                        value={editForm.keluar_manual || ''}
+                        onChange={(e) => handleInputChange('keluar_manual', parseInt(e.target.value) || 0)}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       />
                     ) : (
-                      item.keluar
+                      item.keluar_manual
                     )}
                   </td>
-                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/6">
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
                     {editingId === item.id ? (
                       <input
                         type="number"
-                        value={editForm.stock_akhir || ''}
-                        onChange={(e) => handleInputChange('stock_akhir', parseInt(e.target.value) || 0)}
+                        value={editForm.keluar_pos || ''}
+                        onChange={(e) => handleInputChange('keluar_pos', parseInt(e.target.value) || 0)}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                       />
                     ) : (
-                      <span className={`font-medium ${calculateStockValues(item.stock_awal, item.keluar).stock_akhir < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                        {calculateStockValues(item.stock_awal, item.keluar).stock_akhir}
-                      </span>
+                      item.keluar_pos
                     )}
                   </td>
-                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/6">
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
+                    <span className={`font-medium ${item.stock_akhir < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {item.stock_akhir}
+                    </span>
+                  </td>
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
+                    <span className={`font-medium ${item.qty_di_pesan > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
+                      {item.qty_di_pesan}
+                    </span>
+                  </td>
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
+                    <span className={`font-medium ${item.selisih > 0 ? 'text-green-600' : item.selisih < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {item.selisih}
+                    </span>
+                  </td>
+                  <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
                     {editingId === item.id ? (
-                      <input
-                        type="number"
-                        value={editForm.qty_di_pesan || ''}
-                        onChange={(e) => handleInputChange('qty_di_pesan', parseInt(e.target.value) || 0)}
+                      <select
+                        value={editForm.days_to_order || item.days_to_order || 3}
+                        onChange={(e) => handleInputChange('days_to_order', parseInt(e.target.value) || 3)}
                         className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      />
+                      >
+                        <option value={0}>0</option>
+                        <option value={1}>1</option>
+                        <option value={2}>2</option>
+                        <option value={3}>3</option>
+                      </select>
                     ) : (
-                      <span className={`font-medium ${calculateStockValues(item.stock_awal, item.keluar).qty_di_pesan > 0 ? 'text-orange-600' : 'text-gray-500'}`}>
-                        {calculateStockValues(item.stock_awal, item.keluar).qty_di_pesan}
+                      <span className="font-medium text-blue-600">
+                        {item.days_to_order || 3}
                       </span>
                     )}
                   </td>
@@ -336,16 +438,18 @@ export default function StockPage() {
       )}
 
       <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4 w-full">
-        <h3 className="text-lg font-semibold text-blue-900 mb-2">Daily Stock System & Calculation Logic</h3>
+        <h3 className="text-lg font-semibold text-blue-900 mb-2">Stock Management System</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>• <strong>STOCK AKHIR</strong> = STOCK AWAL - KELUAR</li>
-          <li>• <strong>QTY DI PESAN</strong> = KELUAR × 3 - STOCK AKHIR</li>
-          <li>• <strong>QTY DI PESAN</strong> stays the same throughout the day</li>
-          <li>• <strong>At midnight</strong>, QTY DI PESAN is automatically added to STOCK AWAL for the next day</li>
-          <li>• <strong>QTY DI PESAN</strong> then resets to 0 for the new day</li>
+          <li>• <strong>STOCK AKHIR</strong> = STOCK AWAL - (KELUAR MANUAL + KELUAR POS)</li>
+          <li>• <strong>QTY DI PESAN</strong> = (KELUAR MANUAL + KELUAR POS) × DAYS TO ORDER - STOCK AKHIR</li>
+          <li>• <strong>SELISIH</strong> = KELUAR POS - KELUAR MANUAL (difference between POS and manual)</li>
+          <li>• <strong>DAYS TO ORDER</strong> - Customizable multiplier (0, 1, 2, 3) for reorder calculation</li>
+          <li>• <strong>KELUAR MANUAL</strong> - Stock out through manual processes</li>
+          <li>• <strong>KELUAR POS</strong> - Stock out through POS system</li>
+          <li>• <strong>Simple Management</strong> - Direct editing of all values in the table</li>
         </ul>
         <p className="text-sm text-blue-700 mt-2">
-          <strong>Note:</strong> Click the "Edit" button on any row to modify values. Changes are automatically saved to the database and stock transactions are recorded for audit purposes. The daily rollover happens automatically at midnight.
+          <strong>Note:</strong> Click the "Edit" button on any row to modify basic stock values (name, stock awal, keluar manual, keluar pos, days to order). Stock akhir, qty di pesan, and selisih are automatically calculated and cannot be edited directly.
         </p>
       </div>
         </div>

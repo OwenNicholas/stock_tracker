@@ -4,7 +4,15 @@ import { query } from '@/lib/db';
 export async function GET() {
   try {
     const result = await query(`
-      SELECT * FROM current_stock 
+      SELECT 
+        id,
+        name,
+        stock_awal,
+        keluar_manual,
+        keluar_pos,
+        stock_akhir,
+        qty_di_pesan
+      FROM products 
       ORDER BY name ASC
     `);
     

@@ -6,27 +6,17 @@ export class ProductService {
     try {
       const result = await query(`
         SELECT 
-          p.id,
-          p.name,
-          COALESCE(stock_summary.current_stock, 0) as stock_awal,
-          COALESCE(stock_summary.total_out, 0) as keluar,
-          COALESCE(stock_summary.current_stock, 0) - COALESCE(stock_summary.total_out, 0) as stock_akhir,
-          GREATEST(0, COALESCE(stock_summary.total_out, 0) * 3 - (COALESCE(stock_summary.current_stock, 0) - COALESCE(stock_summary.total_out, 0))) as qty_di_pesan,
-          p.created_at,
-          p.updated_at
-        FROM products p
-        LEFT JOIN (
-          SELECT 
-            product_id,
-            SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) as total_in,
-            SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) as total_out,
-            SUM(CASE WHEN transaction_type = 'IN' THEN quantity 
-                     WHEN transaction_type = 'OUT' THEN -quantity 
-                     ELSE quantity END) as current_stock
-          FROM stock_transactions 
-          GROUP BY product_id
-        ) stock_summary ON p.id = stock_summary.product_id
-        ORDER BY p.name
+          id,
+          name,
+          stock_awal,
+          keluar_manual,
+          keluar_pos,
+          stock_akhir,
+          qty_di_pesan,
+          created_at,
+          updated_at
+        FROM products
+        ORDER BY name
       `);
 
       return {
@@ -48,27 +38,17 @@ export class ProductService {
     try {
       const result = await query(`
         SELECT 
-          p.id,
-          p.name,
-          COALESCE(stock_summary.current_stock, 0) as stock_awal,
-          COALESCE(stock_summary.total_out, 0) as keluar,
-          COALESCE(stock_summary.current_stock, 0) - COALESCE(stock_summary.total_out, 0) as stock_akhir,
-          GREATEST(0, COALESCE(stock_summary.total_out, 0) * 3 - (COALESCE(stock_summary.current_stock, 0) - COALESCE(stock_summary.total_out, 0))) as qty_di_pesan,
-          p.created_at,
-          p.updated_at
-        FROM products p
-        LEFT JOIN (
-          SELECT 
-            product_id,
-            SUM(CASE WHEN transaction_type = 'IN' THEN quantity ELSE 0 END) as total_in,
-            SUM(CASE WHEN transaction_type = 'OUT' THEN quantity ELSE 0 END) as total_out,
-            SUM(CASE WHEN transaction_type = 'IN' THEN quantity 
-                     WHEN transaction_type = 'OUT' THEN -quantity 
-                     ELSE quantity END) as current_stock
-          FROM products p
-          GROUP BY product_id
-        ) stock_summary ON p.id = stock_summary.product_id
-        WHERE p.id = $1
+          id,
+          name,
+          stock_awal,
+          keluar_manual,
+          keluar_pos,
+          stock_akhir,
+          qty_di_pesan,
+          created_at,
+          updated_at
+        FROM products
+        WHERE id = $1
       `, [id]);
 
       if (result.rows.length === 0) {
