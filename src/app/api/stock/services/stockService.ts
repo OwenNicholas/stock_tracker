@@ -179,4 +179,42 @@ export class StockService {
       };
     }
   }
+
+  async updateDaysForAll(daysToOrder: number) {
+    try {
+      // Update days_to_order and recompute qty_di_pesan for all products
+      await query(
+        `
+          UPDATE products
+          SET 
+            days_to_order = $1,
+            qty_di_pesan = CASE WHEN $1 = 0 THEN 0 ELSE GREATEST(0, (keluar_manual * $1) - stock_akhir) END,
+            updated_at = CURRENT_TIMESTAMP
+        `,
+        [daysToOrder]
+      );
+
+      // Return updated stock
+      const updated = await this.getCurrentStock();
+      if (!updated.success) {
+        return {
+          success: false,
+          error: 'Failed to fetch updated stock data after bulk update',
+          status: 500
+        };
+      }
+
+      return {
+        success: true,
+        data: updated.data
+      };
+    } catch (error) {
+      console.error('Bulk update days_to_order service error:', error);
+      return {
+        success: false,
+        error: 'Failed to update days_to_order for all products',
+        status: 500
+      };
+    }
+  }
 } 

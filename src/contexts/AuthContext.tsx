@@ -25,8 +25,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    // Simple authentication - you can replace this with real API calls
-    if (username === 'admin' && password === 'password123') {
+    if (username === 'geybokpejaten' && password === 'AGPejaten2024') {
       setIsAuthenticated(true);
       setUser(username);
       localStorage.setItem('stock_tracker_user', username);

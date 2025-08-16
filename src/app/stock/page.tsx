@@ -22,6 +22,7 @@ function StockPageContent() {
   const [error, setError] = useState<string | null>(null)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<Partial<Product>>({})
+  const [bulkDays, setBulkDays] = useState<number>(3)
 
   // Get today's date
   const today = new Date().toLocaleDateString('en-US', {
@@ -77,8 +78,7 @@ function StockPageContent() {
       name: item.name,
       stock_awal: item.stock_awal,
       keluar_manual: item.keluar_manual,
-      keluar_pos: item.keluar_pos,
-      days_to_order: item.days_to_order || 3
+      keluar_pos: item.keluar_pos
     })
   }
 
@@ -98,8 +98,7 @@ function StockPageContent() {
         name: editForm.name || '',
         stock_awal: editForm.stock_awal || 0,
         keluar_manual: editForm.keluar_manual || 0,
-        keluar_pos: editForm.keluar_pos || 0,
-        days_to_order: editForm.days_to_order || 3
+        keluar_pos: editForm.keluar_pos || 0
       })
 
       if (response.success && response.data) {
@@ -202,6 +201,36 @@ function StockPageContent() {
     document.body.removeChild(link);
   }
 
+  const handleBulkUpdateDays = async () => {
+    if (!confirm(`Set Days to Order to ${bulkDays} for all products?`)) {
+      return;
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+      const response = await apiService.updateDaysForAll(bulkDays)
+      if (response.success && response.data) {
+        setStockData(response.data)
+        if (searchTerm.trim() === "") {
+          setFilteredData(response.data)
+        } else {
+          const filtered = response.data.filter(item =>
+            item.name.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+          setFilteredData(filtered)
+        }
+      } else {
+        throw new Error(response.error || 'Failed to update days to order for all products')
+      }
+    } catch (err) {
+      console.error('Bulk update failed:', err)
+      setError('Failed to apply bulk Days to Order update.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <LayoutWrapper>
       <SiteHeader />
@@ -212,7 +241,7 @@ function StockPageContent() {
           <h1 className="text-3xl font-bold text-gray-900">Stock Management</h1>
           <span className="text-lg text-gray-600 font-medium">{today}</span>
         </div>
-        <p className="text-gray-600">Monitor and manage your inventory stock levels</p>
+        <p className="text-gray-600">Pantau dan kelola tingkat stok persediaan Anda</p>
       </div>
 
       {error && (
@@ -231,20 +260,41 @@ function StockPageContent() {
         </div>
       )}
 
-      {/* Search Bar and Rollover Button */}
-      <div className="mb-6 flex justify-between items-center">
-        <button
-          onClick={handleRollover}
-          disabled={loading}
-          className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 flex items-center space-x-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-          </svg>
-          <span>Rollover</span>
-        </button>
-        
-        <div className="relative w-80">
+      {/* Actions: Rollover, Bulk Days, Search */}
+      <div className="mb-6 flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div className="flex flex-col items-start gap-2">
+          <button
+            onClick={handleRollover}
+            disabled={loading}
+            className="bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white font-medium py-2 px-4 rounded-md transition-colors duration-200 flex items-center space-x-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>Rollover</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <label className="text-sm text-gray-700">Hari Untuk Dipesan (Semua)</label>
+            <select
+              value={bulkDays}
+              onChange={(e) => setBulkDays(parseInt(e.target.value) || 0)}
+              className="px-2 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            >
+              <option value={0}>0</option>
+              <option value={1}>1</option>
+              <option value={2}>2</option>
+              <option value={3}>3</option>
+            </select>
+            <button
+              onClick={handleBulkUpdateDays}
+              disabled={loading}
+              className="bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-medium py-2 px-3 rounded-md text-sm"
+            >
+              Apply
+            </button>
+          </div>
+        </div>
+        <div className="relative w-full md:w-80">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -266,7 +316,7 @@ function StockPageContent() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/4">
-                  Product Name
+                  NAMA PRODUCT
                 </th>
                 <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
                   STOCK AWAL
@@ -287,7 +337,7 @@ function StockPageContent() {
                   SELISIH
                 </th>
                 <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/8">
-                  DAYS TO ORDER
+                  HARI UNTUK DIPESAN
                 </th>
                 <th className="px-2 py-4 text-left text-xs font-medium text-gray-500 uppercase tracking-wider md:px-6 w-1/12">
                   Actions
@@ -380,22 +430,9 @@ function StockPageContent() {
                     </span>
                   </td>
                   <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/8">
-                    {editingId === item.id ? (
-                      <select
-                        value={editForm.days_to_order || item.days_to_order || 3}
-                        onChange={(e) => handleInputChange('days_to_order', parseInt(e.target.value) || 3)}
-                        className="w-full px-2 py-1 border border-gray-300 rounded text-sm focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value={0}>0</option>
-                        <option value={1}>1</option>
-                        <option value={2}>2</option>
-                        <option value={3}>3</option>
-                      </select>
-                    ) : (
-                      <span className="font-medium text-blue-600">
-                        {item.days_to_order || 3}
-                      </span>
-                    )}
+                    <span className="font-medium text-blue-600">
+                      {item.days_to_order ?? 0}
+                    </span>
                   </td>
                   <td className="px-2 py-4 whitespace-nowrap text-sm text-gray-900 md:px-6 w-1/12">
                     {editingId === item.id ? (
@@ -438,19 +475,15 @@ function StockPageContent() {
       )}
 
       <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4 w-full">
-        <h3 className="text-lg font-semibold text-blue-900 mb-2">Stock Management System</h3>
+        <h3 className="text-lg font-semibold text-blue-900 mb-2">Stock Management System Logic</h3>
         <ul className="text-sm text-blue-800 space-y-1">
-          <li>• <strong>STOCK AKHIR</strong> = STOCK AWAL - (KELUAR MANUAL + KELUAR POS)</li>
-          <li>• <strong>QTY DI PESAN</strong> = (KELUAR MANUAL + KELUAR POS) × DAYS TO ORDER - STOCK AKHIR</li>
-          <li>• <strong>SELISIH</strong> = KELUAR POS - KELUAR MANUAL (difference between POS and manual)</li>
+          <li>• <strong>STOCK AKHIR</strong> = STOCK AWAL - KELUAR MANUAL</li>
+          <li>• <strong>QTY DI PESAN</strong> = (KELUAR MANUAL × DAYS TO ORDER) - STOCK AKHIR</li>
+          <li>• <strong>SELISIH</strong> = KELUAR POS - KELUAR MANUAL</li>
           <li>• <strong>DAYS TO ORDER</strong> - Customizable multiplier (0, 1, 2, 3) for reorder calculation</li>
-          <li>• <strong>KELUAR MANUAL</strong> - Stock out through manual processes</li>
-          <li>• <strong>KELUAR POS</strong> - Stock out through POS system</li>
-          <li>• <strong>Simple Management</strong> - Direct editing of all values in the table</li>
+          <li>• <strong>KELUAR MANUAL</strong> - Stock out manual</li>
+          <li>• <strong>KELUAR POS</strong> - Stock out POS system</li>
         </ul>
-        <p className="text-sm text-blue-700 mt-2">
-          <strong>Note:</strong> Click the "Edit" button on any row to modify basic stock values (name, stock awal, keluar manual, keluar pos, days to order). Stock akhir, qty di pesan, and selisih are automatically calculated and cannot be edited directly.
-        </p>
       </div>
         </div>
       </main>

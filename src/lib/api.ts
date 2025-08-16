@@ -68,7 +68,7 @@ class ApiService {
     stock_awal: number;
     keluar_manual: number;
     keluar_pos: number;
-    days_to_order: number;
+    days_to_order?: number;
   }): Promise<ApiResponse<Product>> {
     return this.request<Product>(`/stock/update`, {
       method: 'PUT',
@@ -89,6 +89,17 @@ class ApiService {
       headers: {
         'Content-Type': 'application/json',
       },
+    });
+  }
+
+  // Bulk update: set days_to_order for all products
+  async updateDaysForAll(days_to_order: number): Promise<ApiResponse<Product[]>> {
+    return this.request<Product[]>(`/stock/update-days`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ days_to_order }),
     });
   }
 
