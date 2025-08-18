@@ -24,6 +24,7 @@ services:
       dockerfile: Dockerfile.frontend
     container_name: stock_tracker_frontend
     restart: unless-stopped
+    user: root
     environment:
       NODE_ENV: development
       DATABASE_URL: postgresql://stock_user:stock_password@postgres:5432/stock_tracker
